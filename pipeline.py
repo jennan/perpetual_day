@@ -1,23 +1,24 @@
+import pvlib
+
 import pyearthtools.data as petdata
 import pyearthtools.pipeline as petpipe
 
 import site_archive_nci  # noqa
 
 
-def filter_days(iterator, bbox):
+def filter_day_time(iterator, bbox):
     """
     Get the valid time where all pixels in the region have SZA <= 60°.
-    
+
     Parameters:
-        region (tuple): (lat_min, lat_max, lon_min, lon_max).
-        start_time (str).
-        end_time (str).
-    
+        iterator (pyearthtools.pipeline.iterators.Iterator): dates to filter
+        bbox (tuple): bounding box as (lat_min, lat_max, lon_min, lon_max)
+
     Returns:
-        list: Valid times.
+        pyearthtools.pipeline.iterators.Predefined: iterator over valid times
     """
-    lat_min, lat_max, lon_min, lon_max = region
-    
+    lat_min, lat_max, lon_min, lon_max = bbox
+
     bounding_points = [
         (lat_max, lon_min),  # top-left
         (lat_max, lon_max),  # top-right
@@ -29,21 +30,18 @@ def filter_days(iterator, bbox):
     lon_array = [point[1] for point in bounding_points]
     
     valid_times = []
-    for i_time in date_range:
+    for i_time in iterator:
         time_array = [i_time.datetime] * len(bounding_points)
         solpos = pvlib.solarposition.get_solarposition(time_array, lat_array, lon_array)
-        print(solpos['zenith'])
         if (solpos['zenith'] <= 60).all():
             valid_times.append(i_time)
-    return iterator
+
+    return petpipe.iterators.Predefined(valid_times)
 
 
 def features_pipeline(date_range, bbox):
     """Himawari pipeline of the infrared bands"""
     # TODO add normalisation
-
-    # filter days
-    valid_dates = filter_days(date_range, bbox)
 
     # create pipeline
     satproj = petdata.transforms.projection.HimawariProjAus()
@@ -66,7 +64,6 @@ def features_pipeline(date_range, bbox):
         petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
         petpipe.operations.xarray.conversion.ToNumpy(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
-        iterator=valid_dates,
     )
 
     return pipeline
