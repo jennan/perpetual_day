@@ -39,12 +39,22 @@ def filter_day_time(iterator, bbox):
     return petpipe.iterators.Predefined(valid_times)
 
 
-def features_pipeline(date_range, bbox):
-    """Himawari pipeline of the infrared bands"""
+def himawari_pipeline(input_bands, bbox):
     # TODO add normalisation
-
-    # create pipeline
     satproj = petdata.transforms.projection.HimawariProjAus()
+    pipeline = petpipe.Pipeline(
+        petdata.archive.HimawariChannels(bands=input_bands),
+        petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
+        petdata.transform.region.Bounding(*bbox),
+        petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
+        petpipe.operations.xarray.conversion.ToNumpy(),
+        petpipe.operations.numpy.reshape.Squeeze(axis=1),
+    )
+    return pipeline
+
+
+def features_pipeline(bbox):
+    """Himawari pipeline of the infrared bands"""
     input_bands = [
         "OBS_B08",
         "OBS_B09",
@@ -56,33 +66,12 @@ def features_pipeline(date_range, bbox):
         "OBS_B15",
         "OBS_B16",
     ]
-
-    pipeline = petpipe.Pipeline(
-        petdata.archive.HimawariChannels(bands=input_bands),
-        petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
-        petdata.transform.region.Bounding(*bbox),
-        petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
-        petpipe.operations.xarray.conversion.ToNumpy(),
-        petpipe.operations.numpy.reshape.Squeeze(axis=1),
-    )
-
-    return pipeline
+    return himawari_pipeline(input_bands, bbox)
 
 
-def target_pipeline(iterator, bbox):
-    # create pipeline
-    satproj = petdata.transforms.projection.HimawariProjAus()
+def target_pipeline(bbox):
+    """Himawari pipeline of the visible bands"""
     target_bands = [
         "OBS_B03",
     ]
-
-    pipeline = petpipe.Pipeline(
-        petdata.archive.HimawariChannels(bands=target_bands),
-        petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
-        petdata.transform.region.Bounding(*bbox),
-        petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
-        petpipe.operations.xarray.conversion.ToNumpy(),
-        petpipe.operations.numpy.reshape.Squeeze(axis=1),
-    )
-
-    return pipeline
+    return himawari_pipeline(target_bands, bbox)
