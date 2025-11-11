@@ -40,13 +40,14 @@ def filter_day_time(iterator, bbox):
 
 
 def himawari_pipeline(input_bands, bbox):
-    # TODO add normalisation
+    # TODO set MagicNorm cachedir to a specific folder?
     satproj = petdata.transforms.projection.HimawariProjAus()
     pipeline = petpipe.Pipeline(
         petdata.archive.HimawariChannels(bands=input_bands),
         petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
         petdata.transform.region.Bounding(*bbox),
         petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
+        petpipe.operations.xarray.normalisation.MagicNorm(),
         petpipe.operations.xarray.conversion.ToNumpy(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
     )
