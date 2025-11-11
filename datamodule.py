@@ -46,13 +46,10 @@ class PetDataModule(L.LightningDataModule):
             elif np.isnan(targets).any():
                 filename = None
             else:
-                fname_feats = (
-                    self.cache_dir / f"features_{str(date).replace(':', '')}.npy"
-                )
+                date_str = str(date).replace(":", "")
+                fname_feats = self.cache_dir / f"features_{date_str}.npy"
                 np.save(fname_feats, features)
-                fname_targets = (
-                    self.cache_dir / f"targets_{str(date).replace(':', '')}.npy"
-                )
+                fname_targets = self.cache_dir / f"targets_{date_str}.npy"
                 np.save(fname_targets, targets)
                 filename = (fname_feats, fname_targets)
         except petdata.exceptions.DataNotFoundError:
@@ -61,13 +58,16 @@ class PetDataModule(L.LightningDataModule):
 
     def prepare_data(self):
         if self.cache_dir.is_dir():
-            rmtree(self.cache_dir)
-        self.cache_dir.mkdir(parents=True)
-        date_range = self.pipeline.iterator
-        file_list = Parallel(n_jobs=self.n_jobs, verbose=True)(
-            delayed(self._cache_data)(date, i) for i, date in enumerate(date_range)
-        )
-        self.file_list = sorted([fname for fname in file_list if fname is not None])
+            features_list = sorted(self.cache_dir.glob("features_*.npy"))
+            targets_list = sorted(self.cache_dir.glob("targets_*.npy"))
+            self.file_list = list(zip(features_list, targets_list))
+        else:
+            self.cache_dir.mkdir(parents=True)
+            date_range = self.pipeline.iterator
+            file_list = Parallel(n_jobs=self.n_jobs, verbose=True)(
+                delayed(self._cache_data)(date, i) for i, date in enumerate(date_range)
+            )
+            self.file_list = sorted([fname for fname in file_list if fname is not None])
 
     def setup(self, stage: str):
         train_files, test_files = train_test_split(
