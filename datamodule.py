@@ -19,8 +19,10 @@ class NpyDataset(Dataset):
         return len(self.file_list)
 
     def __getitem__(self, idx):
-        sample = np.load(self.file_list[idx])
-        return torch.from_numpy(sample).float()
+        sample = [
+            torch.from_numpy(np.load(fname)).float() for fname in self.file_list[idx]
+        ]
+        return sample
 
 
 class PetDataModule(L.LightningDataModule):
@@ -38,12 +40,21 @@ class PetDataModule(L.LightningDataModule):
 
     def _cache_data(self, date, i):
         try:
-            sample = self.pipeline[date]
-            if not np.isnan(sample).any():
-                filename = self.cache_dir / f"sample_{str(date).replace(':', '')}.npy"
-                np.save(filename, sample)
-            else:
+            features, targets = self.pipeline[date]
+            if np.isnan(features).any():
                 filename = None
+            elif np.isnan(targets).any():
+                filename = None
+            else:
+                fname_feats = (
+                    self.cache_dir / f"features_{str(date).replace(':', '')}.npy"
+                )
+                np.save(fname_feats, features)
+                fname_targets = (
+                    self.cache_dir / f"targets_{str(date).replace(':', '')}.npy"
+                )
+                np.save(fname_targets, targets)
+                filename = (fname_feats, fname_targets)
         except petdata.exceptions.DataNotFoundError:
             filename = None
         return filename
@@ -56,7 +67,7 @@ class PetDataModule(L.LightningDataModule):
         file_list = Parallel(n_jobs=self.n_jobs, verbose=True)(
             delayed(self._cache_data)(date, i) for i, date in enumerate(date_range)
         )
-        self.file_list = sorted([fname for fname in file_list if fname])
+        self.file_list = sorted([fname for fname in file_list if fname is not None])
 
     def setup(self, stage: str):
         train_files, test_files = train_test_split(

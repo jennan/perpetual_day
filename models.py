@@ -1,2 +1,57 @@
-class CNN:
-    pass
+import torch
+import torch.nn as nn
+
+import lightning as L
+
+
+class CNN(L.LightningModule):
+    def __init__(
+        self,
+        chan_in,
+        chan_out,
+        chan_latent=10,
+        learning_rate=3e-4,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        self.layers = nn.Sequential(
+            nn.Conv2d(
+                in_channels=chan_in,
+                out_channels=chan_latent,
+                kernel_size=3,
+                stride=1,
+                padding="same",
+            ),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=chan_latent,
+                out_channels=chan_out,
+                kernel_size=3,
+                stride=1,
+                padding="same",
+            ),
+        )
+
+        self.loss_function = nn.functional.l1_loss
+        self.learning_rate = learning_rate
+
+    def forward(self, x):
+        return self.layers(x)
+
+    def training_step(self, batch, batch_idx):
+        features, targets = batch
+        outputs = self(features)
+        loss = self.loss_function(outputs, targets)
+        self.log("train_loss", loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        features, targets = batch
+        outputs = self(features)
+        loss = self.loss_function(outputs, targets)
+        self.log("val_loss", loss)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return {"optimizer": optimizer}
