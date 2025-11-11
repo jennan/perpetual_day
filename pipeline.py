@@ -1,7 +1,8 @@
 
 
 def filter_days(iterator, bbox):
-	pass
+    # TODO implement filtering
+	return iterator
 
 
 def features_pipeline(date_range, bbox):
