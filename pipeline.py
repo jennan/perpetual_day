@@ -53,7 +53,6 @@ def himawari_pipeline(input_bands, bbox, cachedir):
         petpipe.operations.xarray.normalisation.MagicNorm(cachedir, samples_needed=50),
         petpipe.operations.xarray.conversion.ToNumpy(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
-        #petpipe.Cache(cachedir, pattern_kwargs={"extension": "npy"}),
     )
     return pipeline
 
@@ -71,7 +70,7 @@ def features_pipeline(bbox, cachedir):
         "OBS_B15",
         "OBS_B16",
     ]
-    return himawari_pipeline(input_bands, bbox)
+    return himawari_pipeline(input_bands, bbox, cachedir)
 
 
 def target_pipeline(bbox, cachedir):
@@ -79,4 +78,4 @@ def target_pipeline(bbox, cachedir):
     target_bands = [
         "OBS_B03",
     ]
-    return himawari_pipeline(target_bands, bbox)
+    return himawari_pipeline(target_bands, bbox, cachedir)
