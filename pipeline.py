@@ -70,4 +70,19 @@ def features_pipeline(date_range, bbox):
 
 
 def target_pipeline(iterator, bbox):
-    pass
+    # create pipeline
+    satproj = petdata.transforms.projection.HimawariProjAus()
+    target_bands = [
+        "OBS_B03",
+    ]
+
+    pipeline = petpipe.Pipeline(
+        petdata.archive.HimawariChannels(bands=target_bands),
+        petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
+        petdata.transform.region.Bounding(*bbox),
+        petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
+        petpipe.operations.xarray.conversion.ToNumpy(),
+        petpipe.operations.numpy.reshape.Squeeze(axis=1),
+    )
+
+    return pipeline
