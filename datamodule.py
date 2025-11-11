@@ -11,6 +11,31 @@ from joblib import Parallel, delayed
 import pyearthtools.data as petdata
 
 
+def cache_pipeline(pipeline, cache_dir, n_jobs):
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def cache_data(date):
+        date_str = str(date).replace(":", "")
+        fname_feats = cache_dir / f"features_{date_str}.npy"
+        fname_targets = cache_dir / f"targets_{date_str}.npy"
+
+        if fname_feats.is_file() and fname_targets.is_file():
+            return
+
+        try:
+            features, targets = pipeline[date]
+            if not np.isnan(features).any() and not np.isnan(targets).any():
+                np.save(fname_feats, features)
+                np.save(fname_targets, targets)
+        except petdata.exceptions.DataNotFoundError:
+            pass
+
+    Parallel(n_jobs=n_jobs, verbose=True)(
+        delayed(cache_data)(date) for date in pipeline.iterator
+    )
+
+
 class NpyDataset(Dataset):
     def __init__(self, file_list):
         self.file_list = file_list
@@ -25,49 +50,22 @@ class NpyDataset(Dataset):
         return sample
 
 
-class PetDataModule(L.LightningDataModule):
+class NpyDataModule(L.LightningDataModule):
     def __init__(
-        self, pipeline, cache_dir, n_jobs, val_split: 0.1, test_split: 0.2, **kwargs
+        self, pipeline, file_dir, val_split: 0.1, test_split: 0.2, **kwargs
     ):
         super().__init__()
         self.pipeline = pipeline
-        self.cache_dir = Path(cache_dir)
-        self.n_jobs = n_jobs
+        self.file_dir = Path(file_dir)
         self.val_split = val_split
         self.test_split = test_split
         self.kwargs = kwargs
         self.file_list = []
 
-    def _cache_data(self, date, i):
-        try:
-            features, targets = self.pipeline[date]
-            if np.isnan(features).any():
-                filename = None
-            elif np.isnan(targets).any():
-                filename = None
-            else:
-                date_str = str(date).replace(":", "")
-                fname_feats = self.cache_dir / f"features_{date_str}.npy"
-                np.save(fname_feats, features)
-                fname_targets = self.cache_dir / f"targets_{date_str}.npy"
-                np.save(fname_targets, targets)
-                filename = (fname_feats, fname_targets)
-        except petdata.exceptions.DataNotFoundError:
-            filename = None
-        return filename
-
     def prepare_data(self):
-        if self.cache_dir.is_dir():
-            features_list = sorted(self.cache_dir.glob("features_*.npy"))
-            targets_list = sorted(self.cache_dir.glob("targets_*.npy"))
-            self.file_list = list(zip(features_list, targets_list))
-        else:
-            self.cache_dir.mkdir(parents=True)
-            date_range = self.pipeline.iterator
-            file_list = Parallel(n_jobs=self.n_jobs, verbose=True)(
-                delayed(self._cache_data)(date, i) for i, date in enumerate(date_range)
-            )
-            self.file_list = sorted([fname for fname in file_list if fname is not None])
+        features_list = sorted(self.file_dir.glob("features_*.npy"))
+        targets_list = sorted(self.file_dir.glob("targets_*.npy"))
+        self.file_list = list(zip(features_list, targets_list))
 
     def setup(self, stage: str):
         train_files, test_files = train_test_split(
@@ -76,7 +74,6 @@ class PetDataModule(L.LightningDataModule):
         train_files, val_files = train_test_split(
             train_files, random_state=42, shuffle=True, test_size=self.val_split
         )
-
         self.test_ds = NpyDataset(test_files)
         self.val_ds = NpyDataset(val_files)
         self.train_ds = NpyDataset(train_files)
