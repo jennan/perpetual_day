@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pvlib
 
 import pyearthtools.data as petdata
@@ -39,22 +41,24 @@ def filter_day_time(iterator, bbox):
     return petpipe.iterators.Predefined(valid_times)
 
 
-def himawari_pipeline(input_bands, bbox):
-    # TODO set MagicNorm cachedir to a specific folder?
+def himawari_pipeline(input_bands, bbox, cachedir):
+    cachedir = Path(cachedir)
+    cachedir.mkdir(exist_ok=True, parents=True)
     satproj = petdata.transforms.projection.HimawariProjAus()
     pipeline = petpipe.Pipeline(
         petdata.archive.HimawariChannels(bands=input_bands),
         petdata.transforms.projection.XYtoLonLatRectilinear(satproj),
         petdata.transform.region.Bounding(*bbox),
         petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
-        petpipe.operations.xarray.normalisation.MagicNorm(),
+        petpipe.operations.xarray.normalisation.MagicNorm(cachedir, samples_needed=50),
         petpipe.operations.xarray.conversion.ToNumpy(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
+        #petpipe.Cache(cachedir, pattern_kwargs={"extension": "npy"}),
     )
     return pipeline
 
 
-def features_pipeline(bbox):
+def features_pipeline(bbox, cachedir):
     """Himawari pipeline of the infrared bands"""
     input_bands = [
         "OBS_B08",
@@ -70,7 +74,7 @@ def features_pipeline(bbox):
     return himawari_pipeline(input_bands, bbox)
 
 
-def target_pipeline(bbox):
+def target_pipeline(bbox, cachedir):
     """Himawari pipeline of the visible bands"""
     target_bands = [
         "OBS_B03",
