@@ -5,7 +5,36 @@ import site_archive_nci  # noqa
 
 
 def filter_days(iterator, bbox):
-    # TODO implement filtering
+    """
+    Get the valid time where all pixels in the region have SZA <= 60°.
+    
+    Parameters:
+        region (tuple): (lat_min, lat_max, lon_min, lon_max).
+        start_time (str).
+        end_time (str).
+    
+    Returns:
+        list: Valid times.
+    """
+    lat_min, lat_max, lon_min, lon_max = region
+    
+    bounding_points = [
+        (lat_max, lon_min),  # top-left
+        (lat_max, lon_max),  # top-right
+        (lat_min, lon_min),  # bottom-left
+        (lat_min, lon_max)   # bottom-right
+    ]
+    bounding_points
+    lat_array = [point[0] for point in bounding_points]
+    lon_array = [point[1] for point in bounding_points]
+    
+    valid_times = []
+    for i_time in date_range:
+        time_array = [i_time.datetime] * len(bounding_points)
+        solpos = pvlib.solarposition.get_solarposition(time_array, lat_array, lon_array)
+        print(solpos['zenith'])
+        if (solpos['zenith'] <= 60).all():
+            valid_times.append(i_time)
     return iterator
 
 
