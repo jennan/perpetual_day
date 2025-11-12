@@ -107,11 +107,12 @@ def target_pipeline(bbox):
     return himawari_pipeline(target_bands, bbox)
 
 
-def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
+def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
     cachedir = Path(cachedir)
     if clean_cache and cachedir.is_dir():
         rmtree(cachedir)
 
+    # TODO add one cache per branch?
     valid_range = filter_day_time(date_range, bbox)
     featpipe = features_pipeline(bbox)
     targetpipe = target_pipeline(bbox)
@@ -123,10 +124,45 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
         iterator=valid_range,
     )
 
-    mean_file = cachedir / "
-    
-    # TODO add normalisation, fetch few sample, compute and add deviation
-    # cache_dir.mkdir(exist_ok=True, parents=True) ?
+    stats_dir = cachedir / "stats"
+    feats_mean_file = stats_dir / "feats_mean.npy"
+    feats_std_file = stats_dir / "feats_std.npy"
+    targets_mean_file = stats_dir / "targets_mean.npy"
+    targets_std_file = stats_dir / "targets_std.npy"
+
+    if not stats_dir.is_dir():
+        stats_dir.mkdir(parents=True)
+
+        # TODO randomize sampling?
+        targets, features = zip(
+            *[sample for _, sample in zip(range(n_samples), iter(fullpipe))]
+        )
+        features = np.stack(features)
+        targets = np.stack(targets)
+        print(targets.shape)
+        print(features.shape)
+
+        targets_mean = targets.mean(axis=(0, 2, 3), keepdims=True)
+        targets_std = targets.std(axis=(0, 2, 3), keepdims=True)
+        np.save(targets_mean_file, targets_mean)
+        np.save(targets_std_file, targets_std)
+
+        feats_mean = features.mean(axis=(0, 2, 3), keepdims=True)
+        feats_std = features.std(axis=(0, 2, 3), keepdims=True)
+        np.save(feats_mean_file, feats_mean)
+        np.save(feats_std_file, feats_std)
+
+    targets_norm = petpipe.operations.numpy.normalisation.Deviation(
+        targets_mean_file, targets_std_file
+    )
+    feats_norm = petpipe.operations.numpy.normalisation.Deviation(
+        feats_mean_file, feats_std_file
+    )
+    fullpipe = petpipe.Pipeline(
+        fullpipe,
+        (targets_norm, feats_norm, "map"),
+        iterator=valid_range,
+    )
 
     # TODO exclude missing data
 
