@@ -123,7 +123,11 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
         iterator=valid_range,
     )
 
+    mean_file = cachedir / "
+    
     # TODO add normalisation, fetch few sample, compute and add deviation
     # cache_dir.mkdir(exist_ok=True, parents=True) ?
+
+    # TODO exclude missing data
 
     return fullpipe
