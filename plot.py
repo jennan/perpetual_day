@@ -4,10 +4,17 @@ from matplotlib.ticker import MultipleLocator
 import matplotlib.pyplot as plt
 import pandas as pd
 
-def processing_data(target, pred):
-    
+def processing_data(features, target, pred):
+    feature_field = "channel_0013_brightness_temperature"
     field = "channel_0003_scaled_radiance"
-    
+
+    feature_da = features[feature_field]
+    feature_da_new = xr.DataArray(
+        feature_da.data,
+        dims=["latitude", "longitude"],  # dimension names
+        coords={"latitude": feature_da.latitude.data, "longitude": feature_da.longitude.data},  # assign coords to dims
+        name=field
+    )
     target_da = target[field]
     target_da_new = xr.DataArray(
         target_da.data,
@@ -31,15 +38,15 @@ def processing_data(target, pred):
         name=field
     )
     data_time = target_da['time'].data
-    return target_da_new, pred_da_new, diff_da_new, data_time
+    return feature_da_new, target_da_new, pred_da_new, diff_da_new, data_time
 
-def plot_results(target, pred):
+def plot_results(features, target, pred):
 
-    target_da, pred_da, diff_da, data_time = processing_data(target, pred)
+    feature_da, target_da, pred_da, diff_da, data_time = processing_data(features, target, pred)
 
     proj = ccrs.PlateCarree()
     
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5),
+    fig, axes = plt.subplots(1, 4, figsize=(15, 5),
                           subplot_kw={'projection': proj},
                            sharex=True,
                            sharey=True,
@@ -47,16 +54,17 @@ def plot_results(target, pred):
                           )
 
     # Plot without colorbars
-    im0 = target_da.plot.imshow(ax=axes[0], transform=proj, add_colorbar=False, vmin=0, vmax=1)
-    im1 = pred_da.plot.imshow(ax=axes[1], transform=proj, add_colorbar=False, vmin=0, vmax=1)
-    im2 = diff_da.plot.imshow(ax=axes[2], transform=proj, add_colorbar=False, vmin=-0.5, vmax=0.5, cmap="RdBu_r")
+    im0 = feature_da.plot.imshow(ax=axes[0], transform=proj, add_colorbar=False, vmin=220, vmax=350,cmap='magma_r')
+    im1 = target_da.plot.imshow(ax=axes[1], transform=proj, add_colorbar=False, vmin=0, vmax=1, cmap='gray')
+    im2 = pred_da.plot.imshow(ax=axes[2], transform=proj, add_colorbar=False, vmin=0, vmax=1, cmap='gray')
+    im3 = diff_da.plot.imshow(ax=axes[3], transform=proj, add_colorbar=False, vmin=-0.5, vmax=0.5, cmap="RdBu_r")
     # Add colorbar
-    cbar = fig.colorbar(im2, ax=axes, orientation='vertical', fraction=0.05, pad=0.08, shrink=0.7)
+    cbar = fig.colorbar(im3, ax=axes, orientation='vertical', fraction=0.05, pad=0.08, shrink=0.7)
     cbar.set_label("Diff")
-    
-    axes[0].set_title("Target")
-    axes[1].set_title("Prediction")
-    axes[2].set_title("Diff(Prediction-Target)")
+    axes[0].set_title("Input(B13)")
+    axes[1].set_title("Target(VIS)")
+    axes[2].set_title("Prediction(VIS)")
+    axes[3].set_title("Diff(Prediction-Target)")
     fig.suptitle(pd.to_datetime(data_time).strftime('%Y%m%d %H:%M'), fontsize=12, y=0.85)
 
     for ax in axes:
