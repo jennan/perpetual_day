@@ -2,6 +2,7 @@ import dask
 from dask.distributed import Client
 
 import pyearthtools.pipeline as petpipe
+import pyearthtools.data as petdata
 
 from pipeline import full_pipeline
 
@@ -16,11 +17,19 @@ if __name__ == "__main__":
     fullpipe = full_pipeline(date_range, bbox, cachedir, clean_cache=False)
 
     def cache_data(date):
-        with dask.config.set(scheduler="single-threaded"):
-            fullpipe[date]
+        try:
+            with dask.config.set(scheduler="single-threaded"):
+                fullpipe[date]
+                missing_date = None
+        except petdata.exceptions.DataNotFoundError:
+            missing_date = date
+        return missing_date
 
     client = Client(n_workers=6, threads_per_worker=2)
     print(client.dashboard_link)
 
     futures = client.map(cache_data, list(fullpipe.iterator))
-    client.gather(futures)
+    results = client.gather(futures)
+    # TODO fix printing missing data
+    missing = [date for date in results if date is not None]
+    print("\n".join([str(date) for date in missing]))
