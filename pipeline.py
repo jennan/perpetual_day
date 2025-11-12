@@ -151,6 +151,6 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
         featpipe = normed_pipeline(featpipe, featdir, indices)
         targetpipe = normed_pipeline(targetpipe, targetdir, indices)
 
-    fullpipe = petpipe.Pipeline((targetpipe, featpipe), iterator=valid_range)
+    fullpipe = petpipe.Pipeline((featpipe, targetpipe), iterator=valid_range)
 
     return fullpipe
