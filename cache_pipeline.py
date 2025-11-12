@@ -26,7 +26,7 @@ if __name__ == "__main__":
         except petdata.exceptions.DataNotFoundError:
             pass
 
-    with Client(n_workers=6, threads_per_worker=2) as client:
+    with Client(n_workers=24, threads_per_worker=2) as client:
         print("dashboard url:", client.dashboard_link)
         futures = client.map(cache_data, list(fullpipe.iterator))
         for future in tqdm(as_completed(futures), total=len(futures)):
