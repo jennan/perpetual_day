@@ -107,6 +107,14 @@ def target_pipeline(bbox):
     return himawari_pipeline(target_bands, bbox)
 
 
+class PipelineBranchPoint(petpipe.branching.PipelineBranchPoint):
+
+    @property
+    def complete_steps(self):
+        steps = tuple(x.complete_steps for x in self.sub_pipelines)
+        return steps + ("map",)
+
+
 def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
     cachedir = Path(cachedir)
     if clean_cache and cachedir.is_dir():
@@ -139,28 +147,26 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
         )
         features = np.stack(features)
         targets = np.stack(targets)
-        print(targets.shape)
-        print(features.shape)
 
-        targets_mean = targets.mean(axis=(0, 2, 3), keepdims=True)
-        targets_std = targets.std(axis=(0, 2, 3), keepdims=True)
+        targets_mean = targets.mean(axis=(0, 2, 3))[..., None, None]
+        targets_std = targets.std(axis=(0, 2, 3))[..., None, None]
         np.save(targets_mean_file, targets_mean)
         np.save(targets_std_file, targets_std)
 
-        feats_mean = features.mean(axis=(0, 2, 3), keepdims=True)
-        feats_std = features.std(axis=(0, 2, 3), keepdims=True)
+        feats_mean = features.mean(axis=(0, 2, 3))[..., None, None]
+        feats_std = features.std(axis=(0, 2, 3))[..., None, None]
         np.save(feats_mean_file, feats_mean)
         np.save(feats_std_file, feats_std)
 
     targets_norm = petpipe.operations.numpy.normalisation.Deviation(
-        targets_mean_file, targets_std_file
+        targets_mean_file, targets_std_file, expand=False
     )
     feats_norm = petpipe.operations.numpy.normalisation.Deviation(
-        feats_mean_file, feats_std_file
+        feats_mean_file, feats_std_file, expand=False
     )
     fullpipe = petpipe.Pipeline(
         fullpipe,
-        (targets_norm, feats_norm, "map"),
+        PipelineBranchPoint(targets_norm, feats_norm, "map"),
         iterator=valid_range,
     )
 
