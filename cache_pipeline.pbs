@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -P nf33
+#PBS -q normal
+#PBS -l ncpus=12
+#PBS -l mem=50gb
+#PBS -l walltime=00:30:00
+#PBS -l wd
+#PBS -j oe
+#PBS -l storage=gdata/dk92+gdata/kd24+gdata/rt52+scratch/nf33+gdata/rv74+gdata/rq0+gdata/ra22+gdata/rq0
+
+export MODULEPATH=/g/data/dk92/apps/Modules/modulefiles:$MODULEPATH
+module load pet/0.4.0
+
+python3 cache_pipeline.py

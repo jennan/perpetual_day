@@ -66,7 +66,7 @@ class ToFloat32(petpipe.operation.Operation):
         return sample.astype(np.float32)
 
 
-def himawari_pipeline(input_bands, bbox):
+def himawari_pipeline(input_bands, bbox, cachedir):
     satproj = petdata.transforms.projection.HimawariProjAus()
     himawari = petdata.archive.HimawariChannels(bands=input_bands)
     himawari._import = "site_archive_nci"
@@ -78,11 +78,14 @@ def himawari_pipeline(input_bands, bbox):
         petpipe.operations.xarray.conversion.ToNumpy(),
         ToFloat32(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
+        petpipe.modifications.Cache(
+            cachedir, pattern_kwargs={"extension": "npy"}, cache_validity="trust"
+        ),
     )
     return pipeline
 
 
-def features_pipeline(bbox):
+def features_pipeline(bbox, cachedir):
     """Himawari pipeline of the infrared bands"""
     input_bands = [
         "OBS_B08",
@@ -95,23 +98,39 @@ def features_pipeline(bbox):
         "OBS_B15",
         "OBS_B16",
     ]
-    return himawari_pipeline(input_bands, bbox)
+    return himawari_pipeline(input_bands, bbox, cachedir)
 
 
-def target_pipeline(bbox):
+def target_pipeline(bbox, cachedir):
     """Himawari pipeline of the visible bands"""
     target_bands = [
         "OBS_B03",
     ]
-    return himawari_pipeline(target_bands, bbox)
+    return himawari_pipeline(target_bands, bbox, cachedir)
 
 
-class PipelineBranchPoint(petpipe.branching.PipelineBranchPoint):
+def normed_pipeline(pipeline, cachedir, indices):
+    mean_file = cachedir / "mean.npy"
+    std_file = cachedir / "std.npy"
 
-    @property
-    def complete_steps(self):
-        steps = tuple(x.complete_steps for x in self.sub_pipelines)
-        return steps + ("map",)
+    if not mean_file.is_file() or not std_file.is_file():
+        # TODO randomize sampling?
+        samples = [pipeline[i] for i in indices]
+        samples = np.stack(samples)
+        mean = samples.mean(axis=(0, 2, 3))[..., None, None]
+        std = samples.std(axis=(0, 2, 3))[..., None, None]
+        np.save(mean_file, mean)
+        np.save(std_file, std)
+
+    pipeline = petpipe.Pipeline(
+        pipeline,
+        petpipe.operations.numpy.normalisation.Deviation(
+            mean_file, std_file, expand=False
+        ),
+        iterator=pipeline.iterator,
+    )
+
+    return pipeline
 
 
 def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
@@ -119,56 +138,19 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
     if clean_cache and cachedir.is_dir():
         rmtree(cachedir)
 
-    # TODO add one cache per branch?
     valid_range = filter_day_time(date_range, bbox)
-    featpipe = features_pipeline(bbox)
-    targetpipe = target_pipeline(bbox)
-    fullpipe = petpipe.Pipeline(
-        (targetpipe, featpipe),
-        petpipe.modifications.Cache(
-            cachedir, pattern_kwargs={"extension": "npy"}, cache_validity="trust"
-        ),
-        iterator=valid_range,
-    )
 
-    stats_dir = cachedir / "stats"
-    feats_mean_file = stats_dir / "feats_mean.npy"
-    feats_std_file = stats_dir / "feats_std.npy"
-    targets_mean_file = stats_dir / "targets_mean.npy"
-    targets_std_file = stats_dir / "targets_std.npy"
+    featdir = cachedir / "features"
+    featpipe = features_pipeline(bbox, featdir)
 
-    if not stats_dir.is_dir():
-        stats_dir.mkdir(parents=True)
+    targetdir = cachedir / "targets"
+    targetpipe = target_pipeline(bbox, targetdir)
 
-        # TODO randomize sampling?
-        targets, features = zip(
-            *[sample for _, sample in zip(range(n_samples), iter(fullpipe))]
-        )
-        features = np.stack(features)
-        targets = np.stack(targets)
+    if n_samples is not None:
+        indices = list(valid_range)[:n_samples]  # TODO use random dates?
+        featpipe = normed_pipeline(featpipe, featdir, indices)
+        targetpipe = normed_pipeline(targetpipe, targetdir, indices)
 
-        targets_mean = targets.mean(axis=(0, 2, 3))[..., None, None]
-        targets_std = targets.std(axis=(0, 2, 3))[..., None, None]
-        np.save(targets_mean_file, targets_mean)
-        np.save(targets_std_file, targets_std)
-
-        feats_mean = features.mean(axis=(0, 2, 3))[..., None, None]
-        feats_std = features.std(axis=(0, 2, 3))[..., None, None]
-        np.save(feats_mean_file, feats_mean)
-        np.save(feats_std_file, feats_std)
-
-    targets_norm = petpipe.operations.numpy.normalisation.Deviation(
-        targets_mean_file, targets_std_file, expand=False
-    )
-    feats_norm = petpipe.operations.numpy.normalisation.Deviation(
-        feats_mean_file, feats_std_file, expand=False
-    )
-    fullpipe = petpipe.Pipeline(
-        fullpipe,
-        PipelineBranchPoint(targets_norm, feats_norm, "map"),
-        iterator=valid_range,
-    )
-
-    # TODO exclude missing data
+    fullpipe = petpipe.Pipeline((targetpipe, featpipe), iterator=valid_range)
 
     return fullpipe
