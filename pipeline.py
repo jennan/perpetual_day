@@ -161,7 +161,7 @@ def filter_dates(pipeline, n_jobs):
         except petdata.exceptions.DataNotFoundError:
             return None
 
-    good_dates = Parallel(n_jobs=n_jobs, verbose=True)(
+    good_dates = Parallel(n_jobs=n_jobs)(
         delayed(good_date)(date) for date in pipeline.iterator
     )
     good_date = [date for date in good_dates if date is not None]

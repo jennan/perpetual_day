@@ -43,7 +43,7 @@ class CNN(L.LightningModule):
         features, targets = batch
         outputs = self(features)
         loss = self.loss_function(outputs, targets)
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, loss, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -92,7 +92,7 @@ class UNet(L.LightningModule):
         features, targets = batch
         outputs = self(features)
         loss = self.loss_function(outputs, targets)
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
