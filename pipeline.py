@@ -111,7 +111,6 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
     cachedir = Path(cachedir)
     if clean_cache and cachedir.is_dir():
         rmtree(cachedir)
-    # cache_dir.mkdir(exist_ok=True, parents=True)
 
     valid_range = filter_day_time(date_range, bbox)
     featpipe = features_pipeline(bbox)
@@ -125,5 +124,6 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
     )
 
     # TODO add normalisation, fetch few sample, compute and add deviation
+    # cache_dir.mkdir(exist_ok=True, parents=True) ?
 
     return fullpipe
