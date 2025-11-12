@@ -1,8 +1,8 @@
 from pathlib import Path
-from shutil import rmtree
 
 import pvlib
 import numpy as np
+from joblib import Parallel, delayed
 
 import pyearthtools.data as petdata
 import pyearthtools.pipeline as petpipe
@@ -133,17 +133,14 @@ def normed_pipeline(pipeline, cachedir, indices):
     return pipeline
 
 
-def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
-    cachedir = Path(cachedir)
-    if clean_cache and cachedir.is_dir():
-        rmtree(cachedir)
-
+def full_pipeline(date_range, bbox, cachedir, n_samples=50):
     valid_range = filter_day_time(date_range, bbox)
 
+    cachedir = Path(cachedir)
     featdir = cachedir / "features"
-    featpipe = features_pipeline(bbox, featdir)
-
     targetdir = cachedir / "targets"
+
+    featpipe = features_pipeline(bbox, featdir)
     targetpipe = target_pipeline(bbox, targetdir)
 
     if n_samples is not None:
@@ -154,3 +151,19 @@ def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
     fullpipe = petpipe.Pipeline((featpipe, targetpipe), iterator=valid_range)
 
     return fullpipe
+
+
+def filter_dates(pipeline, n_jobs):
+    def good_date(date):
+        try:
+            pipeline[date]
+            return date
+        except petdata.exceptions.DataNotFoundError:
+            return None
+
+    good_dates = Parallel(n_jobs=n_jobs, verbose=True)(
+        delayed(good_date)(date) for date in pipeline.iterator
+    )
+    good_date = [date for date in good_dates if date is not None]
+
+    return good_date
