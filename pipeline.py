@@ -133,6 +133,22 @@ def normed_pipeline(pipeline, cachedir, indices):
     return pipeline
 
 
+def filter_dates(pipeline, n_jobs):
+    def filter_one_date(date):
+        try:
+            pipeline[date]
+            return date
+        except petdata.exceptions.DataNotFoundError:
+            return None
+
+    valid_dates = Parallel(n_jobs=n_jobs)(
+        delayed(filter_one_date)(date) for date in pipeline.iterator
+    )
+    valid_dates = [date for date in valid_dates if date is not None]
+
+    return valid_dates
+
+
 def full_pipeline(date_range, bbox, cachedir, n_samples=50):
     valid_range = filter_day_time(date_range, bbox)
 
@@ -151,19 +167,3 @@ def full_pipeline(date_range, bbox, cachedir, n_samples=50):
     fullpipe = petpipe.Pipeline((featpipe, targetpipe), iterator=valid_range)
 
     return fullpipe
-
-
-def filter_dates(pipeline, n_jobs):
-    def good_date(date):
-        try:
-            pipeline[date]
-            return date
-        except petdata.exceptions.DataNotFoundError:
-            return None
-
-    good_dates = Parallel(n_jobs=n_jobs)(
-        delayed(good_date)(date) for date in pipeline.iterator
-    )
-    good_date = [date for date in good_dates if date is not None]
-
-    return good_date
