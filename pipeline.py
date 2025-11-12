@@ -75,7 +75,6 @@ def himawari_pipeline(input_bands, bbox):
         XYtoLonLatRectilinear(satproj),
         petdata.transform.region.Bounding(*bbox),
         petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
-        # petpipe.operations.xarray.normalisation.MagicNorm(cachedir, samples_needed=50),
         petpipe.operations.xarray.conversion.ToNumpy(),
         ToFloat32(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
