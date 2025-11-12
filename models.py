@@ -83,7 +83,7 @@ class UNet(L.LightningModule):
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
 
-    def forward(self, x):
+    def forward(self, x, timestep=None):
         # UNet requires a timestep argument (for diffusion), but you can pass a dummy value if not using diffusion
         if timestep is None:
             timestep = torch.tensor([0], device=x.device)
