@@ -66,7 +66,7 @@ class ToFloat32(petpipe.operation.Operation):
         return sample.astype(np.float32)
 
 
-def himawari_pipeline(input_bands, bbox):
+def himawari_pipeline(input_bands, bbox, cachedir):
     satproj = petdata.transforms.projection.HimawariProjAus()
     himawari = petdata.archive.HimawariChannels(bands=input_bands)
     himawari._import = "site_archive_nci"
@@ -75,15 +75,17 @@ def himawari_pipeline(input_bands, bbox):
         XYtoLonLatRectilinear(satproj),
         petdata.transform.region.Bounding(*bbox),
         petdata.transforms.variables.Drop(["x", "y", "geostationary"]),
-        # petpipe.operations.xarray.normalisation.MagicNorm(cachedir, samples_needed=50),
         petpipe.operations.xarray.conversion.ToNumpy(),
         ToFloat32(),
         petpipe.operations.numpy.reshape.Squeeze(axis=1),
+        petpipe.modifications.Cache(
+            cachedir, pattern_kwargs={"extension": "npy"}, cache_validity="trust"
+        ),
     )
     return pipeline
 
 
-def features_pipeline(bbox):
+def features_pipeline(bbox, cachedir):
     """Himawari pipeline of the infrared bands"""
     input_bands = [
         "OBS_B08",
@@ -96,34 +98,59 @@ def features_pipeline(bbox):
         "OBS_B15",
         "OBS_B16",
     ]
-    return himawari_pipeline(input_bands, bbox)
+    return himawari_pipeline(input_bands, bbox, cachedir)
 
 
-def target_pipeline(bbox):
+def target_pipeline(bbox, cachedir):
     """Himawari pipeline of the visible bands"""
     target_bands = [
         "OBS_B03",
     ]
-    return himawari_pipeline(target_bands, bbox)
+    return himawari_pipeline(target_bands, bbox, cachedir)
 
 
-def full_pipeline(date_range, bbox, cachedir, clean_cache=False):
+def normed_pipeline(pipeline, cachedir, indices):
+    mean_file = cachedir / "mean.npy"
+    std_file = cachedir / "std.npy"
+
+    if not mean_file.is_file() or not std_file.is_file():
+        # TODO randomize sampling?
+        samples = [pipeline[i] for i in indices]
+        samples = np.stack(samples)
+        mean = samples.mean(axis=(0, 2, 3))[..., None, None]
+        std = samples.std(axis=(0, 2, 3))[..., None, None]
+        np.save(mean_file, mean)
+        np.save(std_file, std)
+
+    pipeline = petpipe.Pipeline(
+        pipeline,
+        petpipe.operations.numpy.normalisation.Deviation(
+            mean_file, std_file, expand=False
+        ),
+        iterator=pipeline.iterator,
+    )
+
+    return pipeline
+
+
+def full_pipeline(date_range, bbox, cachedir, clean_cache=False, n_samples=50):
     cachedir = Path(cachedir)
     if clean_cache and cachedir.is_dir():
         rmtree(cachedir)
-    # cache_dir.mkdir(exist_ok=True, parents=True)
 
     valid_range = filter_day_time(date_range, bbox)
-    featpipe = features_pipeline(bbox)
-    targetpipe = target_pipeline(bbox)
-    fullpipe = petpipe.Pipeline(
-        (targetpipe, featpipe),
-        petpipe.modifications.Cache(
-            cachedir, pattern_kwargs={"extension": "npy"}, cache_validity="trust"
-        ),
-        iterator=valid_range,
-    )
 
-    # TODO add normalisation, fetch few sample, compute and add deviation
+    featdir = cachedir / "features"
+    featpipe = features_pipeline(bbox, featdir)
+
+    targetdir = cachedir / "targets"
+    targetpipe = target_pipeline(bbox, targetdir)
+
+    if n_samples is not None:
+        indices = list(valid_range)[:n_samples]  # TODO use random dates?
+        featpipe = normed_pipeline(featpipe, featdir, indices)
+        targetpipe = normed_pipeline(targetpipe, targetdir, indices)
+
+    fullpipe = petpipe.Pipeline((featpipe, targetpipe), iterator=valid_range)
 
     return fullpipe
