@@ -104,7 +104,7 @@ if __name__ == "__main__":
     featurepipe["20200301T0000"]
 
     dm.train()
-    for i in range(10):
+    for i in range(5):
         features, targets = dm[i]
         preds = predict(model, features, targets)
 
@@ -116,7 +116,7 @@ if __name__ == "__main__":
         fig.savefig(resultsdir / f"train_{i}.png", bbox_inches="tight")
 
     dm.eval()
-    for i in range(10):
+    for i in range(5):
         features, targets = dm[i]
         preds = predict(model, features, targets)
 
