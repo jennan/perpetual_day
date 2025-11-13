@@ -1,3 +1,4 @@
+import pickle
 from pathlib import Path
 
 import pvlib
@@ -133,7 +134,7 @@ def normed_pipeline(pipeline, cachedir, indices):
     return pipeline
 
 
-def filter_dates(pipeline, n_jobs):
+def _filter_dates(pipeline, n_jobs):
     def filter_one_date(date):
         try:
             pipeline[date]
@@ -145,6 +146,23 @@ def filter_dates(pipeline, n_jobs):
         delayed(filter_one_date)(date) for date in pipeline.iterator
     )
     valid_dates = [date for date in valid_dates if date is not None]
+
+    return valid_dates
+
+
+def filter_dates(pipeline, cachedir, n_jobs):
+    start_date, *_, end_date = list(pipeline.iterator)
+    start_date = f"{start_date.datetime:%Y%m%dT%H%M}"
+    end_date = f"{end_date.datetime:%Y%m%dT%H%M}"
+    valid_dates_file = Path(cachedir) / f"valid_dates-{start_date}-{end_date}.pkl"
+
+    if not valid_dates_file.is_file():
+        valid_dates = _filter_dates(pipeline, n_jobs)
+        with valid_dates_file.open("wb") as fd:
+            pickle.dump(valid_dates, fd)
+
+    with valid_dates_file.open("rb") as fd:
+        valid_dates = pickle.load(fd)
 
     return valid_dates
 

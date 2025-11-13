@@ -1,6 +1,3 @@
-import pickle
-from pathlib import Path
-
 import lightning as L
 import pyearthtools.pipeline as petpipe
 import pyearthtools.training as pettrain
@@ -18,18 +15,7 @@ if __name__ == "__main__":
     cachedir = "/scratch/nf33/mr3857/cache2"
 
     fullpipe = full_pipeline(date_range, bbox, cachedir)
-
-    # TODO use dates in filename
-    good_dates_file = Path("valid_dates.pkl")
-
-    if not good_dates_file.is_file():
-        good_dates = filter_dates(fullpipe, n_jobs=12)
-        with good_dates_file.open("wb") as fd:
-            pickle.dump(good_dates, fd)
-
-    with good_dates_file.open("rb") as fd:
-        good_dates = pickle.load(fd)
-
+    good_dates = filter_dates(fullpipe, cachedir, n_jobs=12)
     print("good dates:", len(good_dates))
 
     train_dates, valid_dates = train_test_split(
