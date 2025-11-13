@@ -3,6 +3,50 @@ import xarray as xr
 from matplotlib.ticker import MultipleLocator
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
+import matplotlib.colors as col
+
+def normalizeList(listOld, new_min = 0, new_max = 1):
+    old_min = min(listOld)
+    old_range = max(listOld) - old_min
+    new_min = new_min
+    new_range = new_max - new_min
+    output = [(n - old_min) / old_range * new_range + new_min for n in listOld]
+    return output
+
+def GetMICAPSIR1Dict(levfile):
+    maplev = np.loadtxt(levfile, skiprows = 0)
+    #maplev = maplev[::-1]#array reverse()
+    #normalize lev
+    lev = maplev[0:,-1]
+    levNew = normalizeList(lev, 0, 1)
+    #get RBG
+    cmap = maplev[0:,:-1]
+    cmap = cmap/255.
+    redList = cmap[0:,0]
+    greenList =cmap[0:,1]
+    blueList = cmap[0:,2]
+
+    redMatrix = [[0 for col in range(3)] for row in range(len(redList))]
+    greenMatrix = [[0 for col in range(3)] for row in range(len(greenList))]
+    blueMatrix = [[0 for col in range(3)] for row in range(len(blueList))]
+    for i in range(len(redList)):
+        redMatrix[i][0] =  levNew[i]
+        redMatrix[i][1] =  redList[i]
+        redMatrix[i][2] =  redList[i]
+        greenMatrix[i][0] =  levNew[i]
+        greenMatrix[i][1] =  greenList[i]
+        greenMatrix[i][2] =  greenList[i]
+        blueMatrix[i][0] =  levNew[i]
+        blueMatrix[i][1] =  blueList[i]
+        blueMatrix[i][2] =  blueList[i]
+    redMatrix.reverse()
+    greenMatrix.reverse()
+    blueMatrix.reverse()
+    MICAPSIR1Dict = {'red': redMatrix,
+                     'green':greenMatrix,
+                     'blue':blueMatrix}
+    return MICAPSIR1Dict
 
 def processing_data(features, target, pred):
     feature_field = "channel_0013_brightness_temperature"
@@ -10,7 +54,7 @@ def processing_data(features, target, pred):
 
     feature_da = features[feature_field]
     feature_da_new = xr.DataArray(
-        feature_da.data,
+        feature_da.data-273.15,
         dims=["latitude", "longitude"],  # dimension names
         coords={"latitude": feature_da.latitude.data, "longitude": feature_da.longitude.data},  # assign coords to dims
         name=field
@@ -52,9 +96,10 @@ def plot_results(features, target, pred):
                            sharey=True,
                            gridspec_kw={'wspace': 0.05}
                           )
-
+    my_cmapDict = GetMICAPSIR1Dict('./maplev_IR1_lyj.LEV')
+    my_cmap = col.LinearSegmentedColormap('my_colormap',my_cmapDict,256)
     # Plot without colorbars
-    im0 = feature_da.plot.imshow(ax=axes[0], transform=proj, add_colorbar=False, vmin=220, vmax=350,cmap='magma_r')
+    im0 = feature_da.plot.imshow(ax=axes[0], transform=proj, add_colorbar=False, vmin=-100, vmax=70,cmap=my_cmap)
     im1 = target_da.plot.imshow(ax=axes[1], transform=proj, add_colorbar=False, vmin=0, vmax=1, cmap='gray')
     im2 = pred_da.plot.imshow(ax=axes[2], transform=proj, add_colorbar=False, vmin=0, vmax=1, cmap='gray')
     im3 = diff_da.plot.imshow(ax=axes[3], transform=proj, add_colorbar=False, vmin=-0.5, vmax=0.5, cmap="RdBu_r")
