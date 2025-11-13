@@ -66,13 +66,15 @@ if __name__ == "__main__":
             "DownBlock2D",
         ),
         up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
-    )    
-    model = DiffusionModel(unet, learning_rate=1e-5)
+    )
+    model = DiffusionModel(unet, learning_rate=1e-4)
 
     trainer = L.Trainer(
         max_epochs=1,
         precision="16-mixed",
         callbacks=[L.pytorch.callbacks.ModelCheckpoint()],
+        devices=2,
+        strategy="ddp",
     )
     trainer.fit(model, dm)
 

@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
-from diffusers import schedulers
-
 import lightning as L
+from diffusers import schedulers, UNet2DModel
 
 
 class CNN(L.LightningModule):
@@ -69,7 +68,6 @@ class UNet(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        # Initialize UNet2DModel
         self.unet = UNet2DModel(
             sample_size=sample_size,
             in_channels=chan_in,
@@ -85,7 +83,6 @@ class UNet(L.LightningModule):
             up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
         )
 
-        # Loss and optimizer settings
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
 
@@ -113,9 +110,9 @@ class UNet(L.LightningModule):
 
 
 class DiffusionModel(L.LightningModule):
-    def __init__(self, model, learning_rate=3e-4):
+    def __init__(self, model, learning_rate=1e-4):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.scheduler = schedulers.DDPMScheduler()
         self.loss_function = nn.functional.l1_loss
@@ -123,7 +120,7 @@ class DiffusionModel(L.LightningModule):
 
     def forward(self, x, t, conds):
         net_input = torch.cat((x, conds), 1)
-        return self.unet(net_input, t).sample
+        return self.model(net_input, t).sample
 
     def training_step(self, batch, batch_idx):
         features, targets = batch
