@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import cartopy.crs as ccrs
 import xarray as xr
 from matplotlib.ticker import MultipleLocator
@@ -122,7 +124,8 @@ def plot_results(features, target, pred):
         gridspec_kw={"wspace": 0.05},
     )
 
-    my_cmapDict = GetMICAPSIR1Dict("./maplev_IR1_lyj.LEV")
+    levfile = Path(__file__).parent / "maplev_IR1_lyj.LEV"
+    my_cmapDict = GetMICAPSIR1Dict(levfile)
     my_cmap = col.LinearSegmentedColormap("my_colormap", my_cmapDict, 256)
 
     # Plot without colorbars
@@ -173,3 +176,5 @@ def plot_results(features, target, pred):
             gl.left_labels = True
         if ax == axes[-1]:
             gl.right_labels = True
+
+    return fig

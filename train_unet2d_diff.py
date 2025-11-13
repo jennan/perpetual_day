@@ -1,8 +1,11 @@
+from pathlib import Path
+
 import torch
 import lightning as L
 import pyearthtools.pipeline as petpipe
 import pyearthtools.training as pettrain
 from tqdm.notebook import tqdm
+from lightning.pytorch.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
 from diffusers import UNet2DModel
 
@@ -29,6 +32,12 @@ if __name__ == "__main__":
     )
     bbox = [-35.27, -34, 150, 151.27]
     cachedir = "/scratch/nf33/mr3857/cache2"
+
+    exp_id = 1
+    while (resultsdir := Path("results") / f"unet2_diff_{exp_id:03}").is_dir():
+        exp_id += 1
+    resultsdir.mkdir(exist_ok=True, parents=True)
+    print("results dir:", resultsdir)
 
     fullpipe = full_pipeline(date_range, bbox, cachedir)
     good_dates = filter_dates(fullpipe, cachedir, n_jobs=12)
@@ -71,12 +80,14 @@ if __name__ == "__main__":
     )
     model = DiffusionModel(unet, learning_rate=1e-4)
 
+    checkpoint = ModelCheckpoint(save_top_k=1, save_last=True, monitor="val_loss")
     trainer = L.Trainer(
-        max_epochs=10,
+        max_epochs=1,
         precision="16-mixed",
-        callbacks=[L.pytorch.callbacks.ModelCheckpoint()],
-        devices=2,
-        strategy="ddp",
+        callbacks=[checkpoint],
+        # devices=2,
+        # strategy="ddp",
+        default_root_dir=resultsdir,
     )
     trainer.fit(model, dm)
 
@@ -93,23 +104,25 @@ if __name__ == "__main__":
     featurepipe["20200301T0000"]
 
     dm.train()
-    for i in range(3):
+    for i in range(10):
         features, targets = dm[i]
         preds = predict(model, features, targets)
 
         features = featurepipe.undo(features).isel(time=0)
         targets = targetpipe.undo(targets).isel(time=0)
-        preds = targetpipe.undo(x).isel(time=0)
+        preds = targetpipe.undo(preds).isel(time=0)
 
-        plot_results(features, targets, preds)
+        fig = plot_results(features, targets, preds)
+        fig.savefig(resultsdir / f"train_{i}.png", bbox_inches="tight")
 
     dm.eval()
-    for i in range(3):
+    for i in range(10):
         features, targets = dm[i]
         preds = predict(model, features, targets)
 
         features = featurepipe.undo(features).isel(time=0)
         targets = targetpipe.undo(targets).isel(time=0)
-        preds = targetpipe.undo(x).isel(time=0)
+        preds = targetpipe.undo(preds).isel(time=0)
 
-        plot_results(features, targets, preds)
+        fig = plot_results(features, targets, preds)
+        fig.savefig(resultsdir / f"val_{i}.png", bbox_inches="tight")
