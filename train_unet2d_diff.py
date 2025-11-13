@@ -11,7 +11,7 @@ from src.models import DiffusionModel
 from src.plot import plot_results
 
 
-def pred_diffusion(model, features, targets):
+def predict(model, features, targets):
     model = model.cuda()
     x = torch.randn(*targets.shape).unsqueeze(0).cuda()
     y = torch.from_numpy(features).unsqueeze(0).cuda()
@@ -19,7 +19,8 @@ def pred_diffusion(model, features, targets):
         with torch.no_grad():
             residual = model(x, t, y)
         x = model.scheduler.step(residual, t, x).prev_sample
-    return x
+    preds = x.squeeze(0).cpu().detach().numpy()
+    return preds
 
 
 if __name__ == "__main__":
@@ -94,23 +95,21 @@ if __name__ == "__main__":
     dm.train()
     for i in range(3):
         features, targets = dm[i]
-        features_plot = featurepipe.undo(features).isel(time=0)
-        targets_plot = targetpipe.undo(targets).isel(time=0)
+        preds = predict(model, features, targets)
 
-        preds = pred_diffusion(model, features, targets)
-        preds = preds.squeeze(0).cpu().detach().numpy()
-        preds = targetpipe.undo(preds).isel(time=0)
+        features = featurepipe.undo(features).isel(time=0)
+        targets = targetpipe.undo(targets).isel(time=0)
+        preds = targetpipe.undo(x).isel(time=0)
 
-        plot_results(features_plot, targets_plot, preds)
+        plot_results(features, targets, preds)
 
     dm.eval()
     for i in range(3):
         features, targets = dm[i]
-        features_plot = featurepipe.undo(features).isel(time=0)
-        targets_plot = targetpipe.undo(targets).isel(time=0)
+        preds = predict(model, features, targets)
 
-        preds = pred_diffusion(model, features, targets)
-        preds = preds.squeeze(0).cpu().detach().numpy()
-        preds = targetpipe.undo(preds).isel(time=0)
+        features = featurepipe.undo(features).isel(time=0)
+        targets = targetpipe.undo(targets).isel(time=0)
+        preds = targetpipe.undo(x).isel(time=0)
 
-        plot_results(features_plot, targets_plot, preds)
+        plot_results(features, targets, preds)
