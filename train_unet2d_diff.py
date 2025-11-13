@@ -1,11 +1,26 @@
+import torch
 import lightning as L
 import pyearthtools.pipeline as petpipe
 import pyearthtools.training as pettrain
+from tqdm.notebook import tqdm
 from sklearn.model_selection import train_test_split
 from diffusers import UNet2DModel
 
-from pipeline import full_pipeline, filter_dates
-from models import DiffusionModel
+from src.pipeline import full_pipeline, filter_dates
+from src.models import DiffusionModel
+from src.plot import plot_results
+
+
+def pred_diffusion(model, features, targets):
+    model = model.cuda()
+    x = torch.randn(*targets.shape).unsqueeze(0).cuda()
+    y = torch.from_numpy(features).unsqueeze(0).cuda()
+    for i, t in tqdm(enumerate(model.scheduler.timesteps)):
+        with torch.no_grad():
+            residual = model(x, t, y)
+        x = model.scheduler.step(residual, t, x).prev_sample
+    return x
+
 
 if __name__ == "__main__":
     date_range = petpipe.iterators.DateRange(
@@ -56,7 +71,7 @@ if __name__ == "__main__":
     model = DiffusionModel(unet, learning_rate=1e-4)
 
     trainer = L.Trainer(
-        max_epochs=1,
+        max_epochs=10,
         precision="16-mixed",
         callbacks=[L.pytorch.callbacks.ModelCheckpoint()],
         devices=2,
@@ -65,3 +80,37 @@ if __name__ == "__main__":
     trainer.fit(model, dm)
 
     print("training finished")
+
+    # get the target pipeline (without cache) to undo transforms on predictions
+    targetpipe = fullpipe.steps[0].sub_pipelines[1]
+    targetpipe = petpipe.Pipeline(*targetpipe.steps[:-2], targetpipe.steps[-1])
+    targetpipe["20200301T0000"]
+
+    # get the feature pipeline (without cache) to undo transforms on features
+    featurepipe = fullpipe.steps[0].sub_pipelines[0]
+    featurepipe = petpipe.Pipeline(*featurepipe.steps[:-2], featurepipe.steps[-1])
+    featurepipe["20200301T0000"]
+
+    dm.train()
+    for i in range(3):
+        features, targets = dm[i]
+        features_plot = featurepipe.undo(features).isel(time=0)
+        targets_plot = targetpipe.undo(targets).isel(time=0)
+
+        preds = pred_diffusion(model, features, targets)
+        preds = preds.squeeze(0).cpu().detach().numpy()
+        preds = targetpipe.undo(preds).isel(time=0)
+
+        plot_results(features_plot, targets_plot, preds)
+
+    dm.eval()
+    for i in range(3):
+        features, targets = dm[i]
+        features_plot = featurepipe.undo(features).isel(time=0)
+        targets_plot = targetpipe.undo(targets).isel(time=0)
+
+        preds = pred_diffusion(model, features, targets)
+        preds = preds.squeeze(0).cpu().detach().numpy()
+        preds = targetpipe.undo(preds).isel(time=0)
+
+        plot_results(features_plot, targets_plot, preds)
