@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-from diffusers import UNet2DModel
+from diffusers import UNet2DModel, schedulers
 
 import lightning as L
+
 
 class CNN(L.LightningModule):
     def __init__(
@@ -43,14 +44,14 @@ class CNN(L.LightningModule):
         features, targets = batch
         outputs = self(features)
         loss = self.loss_function(outputs, targets)
-        self.log("train_loss", loss, loss, on_step=True, on_epoch=True)
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         features, targets = batch
         outputs = self(features)
         loss = self.loss_function(outputs, targets)
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -75,7 +76,12 @@ class UNet(L.LightningModule):
             out_channels=chan_out,
             layers_per_block=2,
             block_out_channels=(64, 128, 256, 512),
-            down_block_types=("DownBlock2D", "DownBlock2D", "DownBlock2D", "DownBlock2D"),
+            down_block_types=(
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+            ),
             up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
         )
 
@@ -99,6 +105,74 @@ class UNet(L.LightningModule):
         features, targets = batch
         outputs = self(features)
         loss = self.loss_function(outputs, targets)
+        self.log("val_loss", loss)
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return {"optimizer": optimizer}
+
+
+class Diffusion(L.LightningModule):
+    def __init__(
+        self,
+        chan_in,
+        chan_out,
+        sample_size=64,
+        learning_rate=3e-4,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+        self.unet = UNet2DModel(
+            sample_size=sample_size,
+            in_channels=chan_in + chan_out,
+            out_channels=chan_out,
+            layers_per_block=2,
+            block_out_channels=(64, 128, 256, 512),
+            down_block_types=(
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+                "DownBlock2D",
+            ),
+            up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
+        )
+        self.scheduler = schedulers.DDPMScheduler()
+        self.loss_function = nn.functional.l1_loss
+        self.learning_rate = learning_rate
+
+    def forward(self, x, t, conds):
+        net_input = torch.cat((x, conds), 1)
+        return self.unet(net_input, t).sample
+
+    def training_step(self, batch, batch_idx):
+        features, targets = batch
+
+        noise = torch.randn_like(targets)
+        steps = torch.randint(
+            self.scheduler.config.num_train_timesteps,
+            (targets.size(0),),
+            device=self.device,
+        )
+        noisy_targets = self.scheduler.add_noise(targets, noise, steps)
+        pred = self(noisy_targets, steps, features)
+
+        loss = self.loss_function(pred, noise)
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        features, targets = batch
+
+        noise = torch.randn_like(targets)
+        steps = torch.randint(
+            self.scheduler.config.num_train_timesteps,
+            (targets.size(0),),
+            device=self.device,
+        )
+        noisy_targets = self.scheduler.add_noise(targets, noise, steps)
+        pred = self(noisy_targets, steps, features)
+
+        loss = self.loss_function(pred, noise)
         self.log("val_loss", loss)
 
     def configure_optimizers(self):
