@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import lightning as L
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from diffusers import schedulers, UNet2DModel
 
 
@@ -110,13 +111,21 @@ class UNet(L.LightningModule):
 
 
 class DiffusionModel(L.LightningModule):
-    def __init__(self, model, learning_rate=1e-4):
+    def __init__(
+        self,
+        model,
+        learning_rate: float = 1e-4,
+        eta_min: float = 1e-6,
+        T_max: int = 5,
+    ):
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
         self.model = model
         self.scheduler = schedulers.DDPMScheduler()
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
+        self.eta_min = eta_min
+        self.T_max = T_max
 
     def forward(self, x, t, conds):
         net_input = torch.cat((x, conds), 1)
@@ -154,5 +163,17 @@ class DiffusionModel(L.LightningModule):
         self.log("val_loss", loss)
 
     def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        scheduler = CosineAnnealingLR(optimizer, eta_min=self.eta_min, T_max=self.T_max)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
+
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}

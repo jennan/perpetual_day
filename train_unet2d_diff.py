@@ -78,11 +78,11 @@ if __name__ == "__main__":
         ),
         up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
     )
-    model = DiffusionModel(unet, learning_rate=1e-4)
+    model = DiffusionModel(unet, learning_rate=1e-4, eta_min=1e-6, T_max=150)
 
     checkpoint = ModelCheckpoint(save_top_k=1, save_last=True, monitor="val_loss")
     trainer = L.Trainer(
-        max_epochs=1,
+        max_epochs=150,
         precision="16-mixed",
         callbacks=[checkpoint],
         # devices=2,
