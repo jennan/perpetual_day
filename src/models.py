@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 import lightning as L
-import diffusers
-from torch.optim.lr_scheduler import CosineAnnealingLR
-
+from diffusers import schedulers, UNet2DModel
+from transformers import CLIPTextModel, CLIPTokenizer
 
 class CNN(L.LightningModule):
     def __init__(
@@ -11,7 +10,7 @@ class CNN(L.LightningModule):
         chan_in,
         chan_out,
         chan_latent=10,
-        learning_rate=1e-4,
+        learning_rate=3e-4,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -57,11 +56,6 @@ class CNN(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
 
-    def predict(self, features, targets_shape):
-        features = torch.from_numpy(features).to(self.device)
-        preds = self(features).to("cpu").detach().numpy()
-        return preds
-
 
 class UNet(L.LightningModule):
     def __init__(
@@ -69,12 +63,12 @@ class UNet(L.LightningModule):
         chan_in,
         chan_out,
         sample_size=64,
-        learning_rate=1e-4,
+        learning_rate=3e-4,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        self.unet = diffusers.UNet2DModel(
+        self.unet = UNet2DModel(
             sample_size=sample_size,
             in_channels=chan_in,
             out_channels=chan_out,
@@ -114,27 +108,15 @@ class UNet(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
 
-    def predict(self, features, targets_shape):
-        features = torch.from_numpy(features).to(self.device)
-        preds = self(features).to("cpu").detach().numpy()
-        return preds
-
 
 class DiffusionModel(L.LightningModule):
-    def __init__(
-        self,
-        model,
-        learning_rate: float = 1e-4,
-        eta_min: float = 1e-6,
-        T_max: int = 5,
-    ):
+    def __init__(self, model, learning_rate=1e-4):
         super().__init__()
+        self.save_hyperparameters(ignore=["model"])
         self.model = model
-        self.scheduler = diffusers.schedulers.DDPMScheduler()
+        self.scheduler = schedulers.DDPMScheduler()
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
-        self.eta_min = eta_min
-        self.T_max = T_max
 
     def forward(self, x, t, conds):
         net_input = torch.cat((x, conds), 1)
@@ -173,39 +155,46 @@ class DiffusionModel(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        scheduler = CosineAnnealingLR(optimizer, eta_min=self.eta_min, T_max=self.T_max)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": scheduler,
-                "monitor": "val_loss",
-                "interval": "epoch",
-                "frequency": 1,
-            },
-        }
-
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
 
-    def predict(self, features, targets_shape):
-        x = torch.randn(*targets_shape).unsqueeze(0).to(self.device)
-        y = torch.from_numpy(features).unsqueeze(0).to(self.device)
-        for i, t in enumerate(self.scheduler.timesteps):
-            with torch.no_grad():
-                residual = self(x, t, y)
-            x = self.scheduler.step(residual, t, x).prev_sample
-        preds = x.squeeze(0).to("cpu").detach().numpy()
-        return preds
+class DiffusionUVit2DModel(DiffusionModel):
+    def __init__(self, model, learning_rate=1e-4):
+        super().__init__(model,learning_rate=learning_rate)
+        # CLIP text encoder
+        self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+        self.text_encoder = CLIPTextModel.from_pretrained("openai/clip-vit-base-patch32")
+        
+    def _get_micro_conds(self, timesteps, batch_size):
+        # Simple example: embed timesteps as learnable embeddings
+        timestep_emb = torch.nn.functional.one_hot(timesteps, num_classes=1000).float()
+        timestep_emb = timestep_emb @ torch.randn(1000, self.model.config.hidden_size, device=self.device)
+        # Repeat for micro tokens (e.g., 4 tokens)
+        micro_conds = timestep_emb.unsqueeze(1).repeat(1, 4, 1)
+        return micro_conds
+        
+    def forward(self, noisy_targets, pooled_text_emb, micro_conds):
+        return self.model(noisy_targets, pooled_text_emb, micro_conds).sample
+        
+    def validation_step(self, batch, batch_idx):
+        features, targets = batch
 
+        noise = torch.randn_like(targets)
+        steps = torch.randint(
+            self.scheduler.config.num_train_timesteps,
+            (targets.size(0),),
+            device=self.device,
+        )
+        noisy_targets = self.scheduler.add_noise(targets, noise, steps)
 
-class DiffUNet2D(DiffusionModel):
-    def __init__(
-        self,
-        learning_rate: float = 1e-4,
-        eta_min: float = 1e-6,
-        T_max: int = 5,
-        **model_kwargs,
-    ):
-        model = diffusers.UNet2DModel(**model_kwargs)
-        super().__init__(model, learning_rate, eta_min, T_max)
-        self.save_hyperparameters()
+        # Encode text
+        tokens = self.tokenizer(features, return_tensors="pt", padding=True, truncation=True).to(self.device)
+        text_features = self.text_encoder(**tokens).pooler_output  # [batch, hidden_size]
+
+        # Micro conditions (e.g., timestep embeddings)
+        micro_conds = self._get_micro_conds(steps, targets.size(0))
+
+        
+        pred = self(noisy_targets, text_features, micro_conds)
+
+        loss = self.loss_function(pred, noise)
+        self.log("val_loss", loss)
