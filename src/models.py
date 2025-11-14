@@ -57,6 +57,11 @@ class CNN(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
 
+    def predict(self, features, targets_shape):
+        features = torch.from_numpy(features).to(self.device)
+        preds = self(features).to("cpu").detach().numpy()
+        return preds
+
 
 class UNet(L.LightningModule):
     def __init__(
@@ -108,6 +113,11 @@ class UNet(L.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
+
+    def predict(self, features, targets_shape):
+        features = torch.from_numpy(features).to(self.device)
+        preds = self(features).to("cpu").detach().numpy()
+        return preds
 
 
 class DiffusionModel(L.LightningModule):
@@ -177,8 +187,8 @@ class DiffusionModel(L.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
 
-    def predict(self, features, targets):
-        x = torch.randn(*targets.shape).unsqueeze(0).to(self.device)
+    def predict(self, features, targets_shape):
+        x = torch.randn(*targets_shape).unsqueeze(0).to(self.device)
         y = torch.from_numpy(features).unsqueeze(0).to(self.device)
         for i, t in enumerate(self.scheduler.timesteps):
             with torch.no_grad():

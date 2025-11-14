@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     for date in train_dates[:5]:
         features, targets = fullpipe[date]
-        preds = model.predict(features, targets)
+        preds = model.predict(features, targets.shape)
 
         features = featurepipe_nocache.undo(features).isel(time=0)
         targets = targetpipe_nocache.undo(targets).isel(time=0)
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     for date in valid_dates[:5]:
         features, targets = fullpipe[date]
-        preds = model.predict(features, targets)
+        preds = model.predict(features, targets.shape)
 
         features = featurepipe_nocache.undo(features).isel(time=0)
         targets = targetpipe_nocache.undo(targets).isel(time=0)
