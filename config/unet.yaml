@@ -1,0 +1,26 @@
+resultsdir: "results/unet"
+cachedir: "/scratch/nf33/mr3857/cache2"
+
+start_date: "20200101T0000"
+end_date: "20220101T0000"
+interval: "30 minutes"
+bbox: [-35.27, -34, 150, 151.27]
+
+n_jobs: 12
+test_size: 0.1
+datamodule_params:
+    batch_size: 32
+    num_workers: 6
+    multiprocessing_context: "forkserver"
+    persistent_workers: True
+
+model_class: "UNet"
+model_params:
+    learning_rate: 1.0e-4
+    chan_in: 9
+    chan_out: 1
+    sample_size: 128
+
+trainer_params:
+    max_epochs: 20
+    precision: "16-mixed"
