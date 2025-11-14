@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 import lightning as L
+import diffusers
 from torch.optim.lr_scheduler import CosineAnnealingLR
-from diffusers import schedulers, UNet2DModel
 
 
 class CNN(L.LightningModule):
@@ -69,7 +69,7 @@ class UNet(L.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
-        self.unet = UNet2DModel(
+        self.unet = diffusers.UNet2DModel(
             sample_size=sample_size,
             in_channels=chan_in,
             out_channels=chan_out,
@@ -119,9 +119,8 @@ class DiffusionModel(L.LightningModule):
         T_max: int = 5,
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["model"])
         self.model = model
-        self.scheduler = schedulers.DDPMScheduler()
+        self.scheduler = diffusers.schedulers.DDPMScheduler()
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
         self.eta_min = eta_min
@@ -177,3 +176,26 @@ class DiffusionModel(L.LightningModule):
 
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {"optimizer": optimizer}
+
+    def predict(self, features, targets):
+        x = torch.randn(*targets.shape).unsqueeze(0).to(self.device)
+        y = torch.from_numpy(features).unsqueeze(0).to(self.device)
+        for i, t in enumerate(self.scheduler.timesteps):
+            with torch.no_grad():
+                residual = self(x, t, y)
+            x = self.scheduler.step(residual, t, x).prev_sample
+        preds = x.squeeze(0).to("cpu").detach().numpy()
+        return preds
+
+
+class UNet2DModel(DiffusionModel):
+    def __init__(
+        self,
+        learning_rate: float = 1e-4,
+        eta_min: float = 1e-6,
+        T_max: int = 5,
+        **model_kwargs,
+    ):
+        model = diffusers.UNet2DModel(**model_kwargs)
+        super().__init__(model, learning_rate, eta_min, T_max)
+        self.save_hyperparameters()
