@@ -20,4 +20,5 @@ export MODULEPATH=/g/data/dk92/apps/Modules/modulefiles:$MODULEPATH
 module load pet/0.4.0
 
 cd "${PBS_O_WORKDIR}"
-python3 train_unet2d_diff.py
+python3 src/train.py config/diff_unet2d.yaml
+python3 src/predict.py config/diff_unet2d.yaml

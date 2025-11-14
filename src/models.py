@@ -11,7 +11,7 @@ class CNN(L.LightningModule):
         chan_in,
         chan_out,
         chan_latent=10,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -64,7 +64,7 @@ class UNet(L.LightningModule):
         chan_in,
         chan_out,
         sample_size=64,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -188,7 +188,7 @@ class DiffusionModel(L.LightningModule):
         return preds
 
 
-class UNet2DModel(DiffusionModel):
+class DiffUNet2D(DiffusionModel):
     def __init__(
         self,
         learning_rate: float = 1e-4,

@@ -1,0 +1,40 @@
+resultsdir: "results/diff_unet2d"
+cachedir: "/scratch/nf33/mr3857/cache2"
+
+start_date: "20200101T0000"
+end_date: "20220101T0000"
+interval: "30 minutes"
+bbox: [-35.27, -34, 150, 151.27]
+
+n_jobs: 12
+test_size: 0.1
+datamodule_params:
+    batch_size: 64
+    num_workers: 6
+    multiprocessing_context: "forkserver"
+    persistent_workers: True
+
+model_class: "DiffUNet2D"
+model_params:
+    learning_rate: 1.0e-4
+    eta_min: 1e-6
+    T_max: 150
+    sample_size: 128
+    in_channels: 10
+    out_channels: 1
+    layers_per_block: 2
+    block_out_channels: [64, 128, 256, 512]
+    down_block_types:
+        - "DownBlock2D"
+        - "DownBlock2D"
+        - "DownBlock2D"
+        - "DownBlock2D"
+    up_block_types:
+        - "UpBlock2D"
+        - "UpBlock2D"
+        - "UpBlock2D"
+        - "UpBlock2D"
+
+trainer_params:
+    max_epochs: 150
+    precision: "16-mixed"
