@@ -18,7 +18,7 @@ class Config(pdt.BaseModel):
     seed: int = 42
     test_size: float | int
     datamodule_params: dict[str, Any]
-    model_class: Literal["CNN", "Unet", "DiffUNet2D"]
+    model_class: Literal["CNN", "UNet", "DiffUNet2D"]
     model_params: dict[str, Any]
     trainer_params: dict[str, Any]
 
@@ -26,8 +26,8 @@ class Config(pdt.BaseModel):
     def model(self):
         if self.model_class == "CNN":
             return src.models.CNN
-        elif self.model_class == "Unet":
-            return src.models.Unet
+        elif self.model_class == "UNet":
+            return src.models.UNet
         elif self.model_class == "DiffUNet2D":
             return src.models.DiffUNet2D
         else:
