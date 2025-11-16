@@ -17,6 +17,8 @@ datamodule_params:
 model_class: "UNet"
 model_params:
     learning_rate: 1.0e-4
+    eta_min: 1e-6
+    T_max: 20
     chan_in: 9
     chan_out: 1
     sample_size: 128

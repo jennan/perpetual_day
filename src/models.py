@@ -70,6 +70,8 @@ class UNet(L.LightningModule):
         chan_out,
         sample_size,
         learning_rate=1e-4,
+        eta_min: float = 1e-6,
+        T_max: int = 5,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -91,6 +93,8 @@ class UNet(L.LightningModule):
 
         self.loss_function = nn.functional.l1_loss
         self.learning_rate = learning_rate
+        self.eta_min = eta_min
+        self.T_max = T_max
 
     def forward(self, x):
         # dummy timestep value as we are not using diffusion
@@ -112,7 +116,16 @@ class UNet(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return {"optimizer": optimizer}
+        scheduler = CosineAnnealingLR(optimizer, eta_min=self.eta_min, T_max=self.T_max)
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                "interval": "epoch",
+                "frequency": 1,
+            },
+        }
 
     def predict(self, features, targets_shape):
         features = torch.from_numpy(features).unsqueeze(0).to(self.device)
@@ -183,9 +196,6 @@ class DiffusionModel(L.LightningModule):
                 "frequency": 1,
             },
         }
-
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-        return {"optimizer": optimizer}
 
     def predict(self, features, targets_shape):
         x = torch.randn(*targets_shape).unsqueeze(0).to(self.device)
