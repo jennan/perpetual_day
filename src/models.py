@@ -68,7 +68,7 @@ class UNet(L.LightningModule):
         self,
         chan_in,
         chan_out,
-        sample_size=64,
+        sample_size,
         learning_rate=1e-4,
     ):
         super().__init__()
@@ -115,8 +115,8 @@ class UNet(L.LightningModule):
         return {"optimizer": optimizer}
 
     def predict(self, features, targets_shape):
-        features = torch.from_numpy(features).to(self.device)
-        preds = self(features).to("cpu").detach().numpy()
+        features = torch.from_numpy(features).unsqueeze(0).to(self.device)
+        preds = self(features).squeeze(0).to("cpu").detach().numpy()
         return preds
 
 
