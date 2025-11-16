@@ -17,7 +17,7 @@ datamodule_params:
 model_class: "DiffUNet2D"
 model_params:
     learning_rate: 1.0e-4
-    eta_min: 1e-6
+    eta_min: 1.0e-6
     T_max: 150
     sample_size: 128
     in_channels: 10
