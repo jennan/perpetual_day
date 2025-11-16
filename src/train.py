@@ -1,3 +1,4 @@
+import os
 import sys
 
 import yaml
@@ -23,8 +24,10 @@ if __name__ == "__main__":
     print("full configuration:")
     print(config.model_dump_json(indent=4))
 
-    # create result folder, crash if exists to avoid overriding results
-    config.resultsdir.mkdir(exist_ok=False, parents=True)
+    # skip folder creation for other ranks in DDP
+    if int(os.environ.get("LOCAL_RANK", 0)) == 0:
+        # create result folder, crash if exists to avoid overriding results
+        config.resultsdir.mkdir(exist_ok=False, parents=True)
 
     date_range = petpipe.iterators.DateRange(
         config.start_date, config.end_date, config.interval

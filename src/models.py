@@ -182,7 +182,7 @@ class DiffusionModel(L.LightningModule):
         pred = self(noisy_targets, steps, features)
 
         loss = self.loss_function(pred, noise)
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, sync_dist=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)

@@ -15,6 +15,8 @@ if __name__ == "__main__":
         print(f"Usage: {sys.argv[0]} <config_file.yaml>", file=sys.stderr)
         sys.exit(1)
 
+    print("predictions started")
+
     with open(sys.argv[1], "r") as fd:
         config = Config(**yaml.safe_load(fd))
 
@@ -65,3 +67,5 @@ if __name__ == "__main__":
         fig = plot_results(features, targets, preds)
         figname = config.resultsdir / f"val_{date.datetime:%Y%m%dT%H%M}.png"
         fig.savefig(figname, bbox_inches="tight")
+
+    print("predictions finished")
