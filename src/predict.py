@@ -4,9 +4,9 @@ import yaml
 import pyearthtools.pipeline as petpipe
 from sklearn.model_selection import train_test_split
 
-from src.config import Config
-from src.pipeline import full_pipeline, filter_dates
-from src.plot import plot_results
+from config import Config
+from pipeline import full_pipeline, filter_dates
+from plot import plot_results
 
 
 if __name__ == "__main__":

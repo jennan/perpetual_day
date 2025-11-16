@@ -7,8 +7,8 @@ import pyearthtools.training as pettrain
 from lightning.pytorch.callbacks import ModelCheckpoint
 from sklearn.model_selection import train_test_split
 
-from src.config import Config
-from src.pipeline import full_pipeline, filter_dates
+from config import Config
+from pipeline import full_pipeline, filter_dates
 
 
 if __name__ == "__main__":
