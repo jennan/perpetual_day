@@ -34,7 +34,7 @@ class CNN(L.LightningModule):
             ),
         )
 
-        self.loss_function = nn.functional.l1_loss
+        self.loss_function = nn.functional.mse_loss
         self.learning_rate = learning_rate
 
     def forward(self, x):
@@ -91,7 +91,7 @@ class UNet(L.LightningModule):
             up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D", "UpBlock2D"),
         )
 
-        self.loss_function = nn.functional.l1_loss
+        self.loss_function = nn.functional.mse_loss
         self.learning_rate = learning_rate
         self.eta_min = eta_min
         self.T_max = T_max
@@ -144,7 +144,7 @@ class DiffusionModel(L.LightningModule):
         super().__init__()
         self.model = model
         self.scheduler = diffusers.schedulers.DDPMScheduler()
-        self.loss_function = nn.functional.l1_loss
+        self.loss_function = nn.functional.mse_loss
         self.learning_rate = learning_rate
         self.eta_min = eta_min
         self.T_max = T_max
