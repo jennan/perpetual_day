@@ -1,0 +1,24 @@
+#!/bin/bash
+#PBS -P nf33
+#PBS -q gpuvolta
+#PBS -l ncpus=12
+#PBS -l ngpus=1
+#PBS -l mem=100gb
+#PBS -l walltime=10:00:00
+#PBS -l wd
+#PBS -l jobfs=10GB
+#PBS -l storage=gdata/dk92+gdata/kd24+gdata/rt52+scratch/nf33+gdata/rv74+gdata/rq0+gdata/ra22+gdata/rq0
+#PBS -koed
+#PBS -e /dev/null
+#PBS -o /dev/null
+
+# redirect stdout and stderr to a log file
+mkdir -p "${PBS_O_WORKDIR}/logs"
+exec &> "${PBS_O_WORKDIR}/logs/${PBS_JOBID%.*}-${PBS_JOBNAME%.*}.log"
+
+export MODULEPATH=/g/data/dk92/apps/Modules/modulefiles:$MODULEPATH
+module load pet/0.4.0
+
+cd "${PBS_O_WORKDIR}"
+python3 src/train.py config/diff_uvit2d.yaml
+python3 src/predict.py config/diff_uvit2d.yaml

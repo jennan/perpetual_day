@@ -1,0 +1,28 @@
+resultsdir: "results/uvit"
+cachedir: "/scratch/nf33/yl4436/cache2"
+
+start_date: "20200101T0000"
+end_date: "20220101T0000"
+interval: "30 minutes"
+bbox: [-35.27, -34, 150, 151.27]
+
+n_jobs: 12
+test_size: 0.1
+datamodule_params:
+    batch_size: 32
+    num_workers: 6
+    multiprocessing_context: "forkserver"
+    persistent_workers: True
+
+model_class: "UVit"
+model_params:
+    learning_rate: 1.0e-4
+    sample_size: 128,        # image size
+    hidden_size: 1024,      # transformer hidden size
+    num_hidden_layers: 22,  # depth
+    num_attention_heads: 16 # attention heads
+    # block_out_channels: (256, 512, 1024),
+
+trainer_params:
+    max_epochs: 20
+    precision: "16-mixed"
